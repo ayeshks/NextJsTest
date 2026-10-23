@@ -122,6 +122,18 @@ export async function saveAccount(accountData) {
   );
 
   if (existing) {
+    if (accountData.color && existing.color !== accountData.color) {
+      existing.color = accountData.color;
+      const col = await getCollectionWithSeed("accounts", "accounts.json");
+      if (col) {
+        try {
+          await col.updateOne({ id: existing.id }, { $set: { color: accountData.color } });
+        } catch (err) {
+          console.warn("MongoDB color update error:", err.message);
+        }
+      }
+      await writeJson("accounts.json", accounts);
+    }
     return existing;
   }
 

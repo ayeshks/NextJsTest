@@ -61,7 +61,7 @@ export default function PasswordGate({ isUnlocked, onUnlock, onUnlockAudio }) {
 
           {error && (
             <div className="text-red-400 text-xs font-semibold animate-bounce flex items-center justify-center gap-2">
-              <i className="fa-solid fa-triangle-exclamation"></i> Invalid Passcode! Use LBO26.
+              <i className="fa-solid fa-triangle-exclamation"></i> Invalid Security Passcode! Access Denied.
             </div>
           )}
 
