@@ -1,0 +1,47 @@
+[
+  {
+    "id": "acc-1",
+    "name": "Kavindu (Host)",
+    "alias": "Kavindu",
+    "avatar": "KV",
+    "role": "VIP Host",
+    "color": "#DC2626",
+    "createdAt": "2026-10-20T10:00:00Z"
+  },
+  {
+    "id": "acc-2",
+    "name": "Sahan Perera",
+    "alias": "Sahan",
+    "avatar": "SP",
+    "role": "VIP Member",
+    "color": "#EF4444",
+    "createdAt": "2026-10-21T12:30:00Z"
+  },
+  {
+    "id": "acc-3",
+    "name": "Dinuka Silva",
+    "alias": "Dinuka",
+    "avatar": "DS",
+    "role": "DJ & Sound",
+    "color": "#F87171",
+    "createdAt": "2026-10-21T14:15:00Z"
+  },
+  {
+    "id": "acc-4",
+    "name": "Akash Fernando",
+    "alias": "Akash",
+    "avatar": "AF",
+    "role": "VIP Member",
+    "color": "#B91C1C",
+    "createdAt": "2026-10-22T08:00:00Z"
+  },
+  {
+    "id": "acc-1792729317709",
+    "name": "Ayesh",
+    "alias": "Ayesh",
+    "avatar": "AY",
+    "role": "VIP Member",
+    "color": "#DC2626",
+    "createdAt": "2026-10-23T04:21:57.709Z"
+  }
+]

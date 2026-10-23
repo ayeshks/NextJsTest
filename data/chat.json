@@ -1,0 +1,42 @@
+[
+  {
+    "id": "msg-1",
+    "accountId": "acc-1",
+    "sender": "Kavindu",
+    "text": "Boys, welcome to the Lontha Boys Party Saga 2026 portal! All villas booked at Canterbury Resort 🥂",
+    "time": "08:30 PM",
+    "createdAt": "2026-10-22T15:00:00Z"
+  },
+  {
+    "id": "msg-2",
+    "accountId": "acc-3",
+    "sender": "Dinuka",
+    "text": "Sound setup and laser strobes are confirmed. Playlist is going to be insane! 🔥",
+    "time": "08:45 PM",
+    "createdAt": "2026-10-22T15:15:00Z"
+  },
+  {
+    "id": "msg-3",
+    "accountId": "acc-2",
+    "sender": "Sahan",
+    "text": "Can't wait! Who is coordinating the convoy from Colombo?",
+    "time": "09:10 PM",
+    "createdAt": "2026-10-22T15:40:00Z"
+  },
+  {
+    "id": "msg-1792729291470",
+    "accountId": "acc-1",
+    "sender": "Kavindu",
+    "text": "Hi Team",
+    "time": "09:51 AM",
+    "createdAt": "2026-10-23T04:21:31.462Z"
+  },
+  {
+    "id": "msg-1792729325383",
+    "accountId": "acc-1792729317709",
+    "sender": "Ayesh",
+    "text": "Hi Team",
+    "time": "09:52 AM",
+    "createdAt": "2026-10-23T04:22:05.383Z"
+  }
+]

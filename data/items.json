@@ -1,0 +1,82 @@
+[
+  {
+    "id": "1",
+    "name": "Alcohol & Spirits",
+    "category": "Drinks",
+    "claimedBy": "",
+    "claimedAccountId": null,
+    "status": false
+  },
+  {
+    "id": "2",
+    "name": "Party Essential Item 1 (Mixers & Ice)",
+    "category": "Drinks",
+    "claimedBy": "",
+    "claimedAccountId": null,
+    "status": false
+  },
+  {
+    "id": "3",
+    "name": "Party Essential Item 2 (Snacks & Munchies)",
+    "category": "Food",
+    "claimedBy": "",
+    "claimedAccountId": null,
+    "status": false
+  },
+  {
+    "id": "4",
+    "name": "Water Bottles (5L packs)",
+    "category": "Essentials",
+    "claimedBy": "",
+    "claimedAccountId": null,
+    "status": false
+  },
+  {
+    "id": "5",
+    "name": "Napkins, Cups & Cutlery",
+    "category": "Essentials",
+    "claimedBy": "",
+    "claimedAccountId": null,
+    "status": false
+  },
+  {
+    "id": "6",
+    "name": "Lollipops & Glow Sticks",
+    "category": "Party Favors",
+    "claimedBy": "",
+    "claimedAccountId": null,
+    "status": false
+  },
+  {
+    "id": "7",
+    "name": "Speakers & Subwoofers",
+    "category": "Audio",
+    "claimedBy": "",
+    "claimedAccountId": null,
+    "status": false
+  },
+  {
+    "id": "8",
+    "name": "Projector & Screen",
+    "category": "Visuals",
+    "claimedBy": "",
+    "claimedAccountId": null,
+    "status": false
+  },
+  {
+    "id": "9",
+    "name": "Strobe Lights & Ambience Bulbs",
+    "category": "Visuals",
+    "claimedBy": "",
+    "claimedAccountId": null,
+    "status": false
+  },
+  {
+    "id": "10",
+    "name": "Lasers & Smoke Machine",
+    "category": "Visuals",
+    "claimedBy": "",
+    "claimedAccountId": null,
+    "status": false
+  }
+]
