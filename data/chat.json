@@ -24,27 +24,19 @@
     "createdAt": "2026-10-22T15:40:00Z"
   },
   {
-    "id": "msg-1792729291470",
+    "id": "msg-1792761353034",
     "accountId": "acc-1",
-    "sender": "Kavindu",
-    "text": "Hi Team",
-    "time": "09:51 AM",
-    "createdAt": "2026-10-23T04:21:31.462Z"
+    "sender": "Thatte",
+    "text": "test",
+    "time": "06:45 PM",
+    "createdAt": "2026-10-23T13:15:52.982Z"
   },
   {
-    "id": "msg-1792729325383",
-    "accountId": "acc-1792729317709",
-    "sender": "Ayesh",
-    "text": "Hi Team",
-    "time": "09:52 AM",
-    "createdAt": "2026-10-23T04:22:05.383Z"
-  },
-  {
-    "id": "msg-1792739715299",
-    "accountId": "acc-1792729317709",
-    "sender": "Ayesh",
-    "text": "Testing Vercel storage fix",
-    "time": "12:45 PM",
-    "createdAt": "2026-10-23T07:15:15.254Z"
+    "id": "msg-1792761557647",
+    "accountId": "acc-1",
+    "sender": "Thatte",
+    "text": "Loving Set",
+    "time": "06:49 PM",
+    "createdAt": "2026-10-23T13:19:17.601Z"
   }
 ]

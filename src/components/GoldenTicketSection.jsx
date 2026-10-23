@@ -10,14 +10,14 @@ export default function GoldenTicketSection({ activeAccount }) {
   const [selectedName, setSelectedName] = useState("");
   const [customName, setCustomName] = useState("");
   const [accessTier, setAccessTier] = useState("VIP Gold Pass - All Access");
-  const [ticketSerial, setTicketSerial] = useState("LB26-GOLD-7749");
+  const [ticketSerial, setTicketSerial] = useState("LB26-WONKA-7749");
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
 
-  const ticketDisplayRef = useRef(null);
+  const ticketCardRef = useRef(null);
 
-  // Fetch registered accounts and attendees
+  // Fetch registered accounts and attendees from MongoDB Atlas / API
   useEffect(() => {
     let ignore = false;
     async function loadMembers() {
@@ -61,27 +61,29 @@ export default function GoldenTicketSection({ activeAccount }) {
       ? customName.trim() || "VIP Guest"
       : selectedName || activeAccount?.alias || memberNames[0] || "VIP Guest";
 
-  // Generate QR code whenever the guest name, serial, or tier changes
+  // Generate QR code for verification with full party details
   useEffect(() => {
     async function makeQr() {
       try {
         const qrPayload = JSON.stringify({
+          ticket: "WILLY WONKA GOLDEN TICKET",
           event: "Lontha Boys Party Saga 2026",
           guest: effectiveGuestName,
           tier: accessTier,
           serial: ticketSerial,
           dates: "Oct 30 - Nov 1, 2026",
-          venue: "Canterbury Nature & Wellness Resort, Kandy",
-          securityCode: "LBO26",
-          status: "VERIFIED_VIP_ACCESS",
+          time: "8:00 P.M. (Check-in 2:00 P.M.)",
+          venue: "Canterbury Nature & Wellness Resort, Kandy, Sri Lanka",
+          gateCode: "LBO26",
+          admittance: "ENSURED_VIP",
         });
 
         const dataUrl = await QRCode.toDataURL(qrPayload, {
-          width: 256,
+          width: 320,
           margin: 1,
           color: {
-            dark: "#1A050A",
-            light: "#FFFBEB",
+            dark: "#1A0F05",
+            light: "#FDF5C4",
           },
         });
         setQrDataUrl(dataUrl);
@@ -95,205 +97,245 @@ export default function GoldenTicketSection({ activeAccount }) {
 
   const handleRegenerateSerial = () => {
     const randomNum = Math.floor(1000 + Math.random() * 9000);
-    setTicketSerial(`LB26-GOLD-${randomNum}`);
+    setTicketSerial(`LB26-WONKA-${randomNum}`);
   };
 
-  // High-Resolution Native 2D Canvas Renderer (Zero CSS parser dependencies)
-  const createGoldenTicketCanvas = async () => {
+  // Helper to draw the authentic circular factory crest
+  const drawFactoryStamp = (ctx, x, y, radius) => {
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Double circle boundary
+    ctx.strokeStyle = "#1A1008";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius - 8, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Dotted decorative ring
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(0, 0, radius - 14, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arched text "LONTHA BOYS" along top curve
+    const text = "LONTHA BOYS";
+    ctx.font = "bold 18px 'Cinzel', Georgia, serif";
+    ctx.fillStyle = "#1A1008";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const totalAngle = Math.PI * 0.65;
+    const startAngle = -Math.PI / 2 - totalAngle / 2;
+    const angleStep = totalAngle / (text.length - 1);
+    const textRadius = radius - 24;
+
+    for (let i = 0; i < text.length; i++) {
+      const angle = startAngle + i * angleStep;
+      ctx.save();
+      ctx.rotate(angle + Math.PI / 2);
+      ctx.translate(0, -textRadius);
+      ctx.fillText(text[i], 0, 0);
+      ctx.restore();
+    }
+
+    // Factory Silhouette in center
+    ctx.fillStyle = "#1A1008";
+    ctx.fillRect(-radius * 0.55, radius * 0.32, radius * 1.1, 4); // ground
+    ctx.fillRect(-radius * 0.45, radius * 0.05, radius * 0.9, radius * 0.28); // base
+
+    // Chimneys
+    ctx.fillRect(-radius * 0.35, -radius * 0.28, radius * 0.14, radius * 0.34);
+    ctx.fillRect(-radius * 0.37, -radius * 0.32, radius * 0.18, 5);
+
+    ctx.fillRect(-radius * 0.08, -radius * 0.46, radius * 0.16, radius * 0.52);
+    ctx.fillRect(-radius * 0.1, -radius * 0.5, radius * 0.2, 5);
+
+    ctx.fillRect(radius * 0.2, -radius * 0.24, radius * 0.14, radius * 0.3);
+    ctx.fillRect(radius * 0.18, -radius * 0.28, radius * 0.18, 5);
+
+    // Billowing smoke puffs
+    ctx.strokeStyle = "#1A1008";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(radius * 0.02, -radius * 0.6, 7, Math.PI * 0.5, Math.PI * 1.7);
+    ctx.arc(radius * 0.14, -radius * 0.7, 10, Math.PI * 0.8, Math.PI * 2);
+    ctx.arc(radius * 0.3, -radius * 0.66, 12, Math.PI, Math.PI * 2.2);
+    ctx.stroke();
+
+    // Bottom stars
+    const starAngles = [-0.3, -0.15, 0, 0.15, 0.3];
+    starAngles.forEach((a) => {
+      ctx.save();
+      ctx.rotate(Math.PI / 2 + a);
+      ctx.translate(0, radius - 22);
+      ctx.beginPath();
+      ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+
+    ctx.restore();
+  };
+
+  // High-Resolution 300+ DPI Wonka Golden Ticket Canvas Renderer
+  const createWonkaCanvas = async () => {
+    if (typeof document !== "undefined" && document.fonts) {
+      await document.fonts.ready;
+    }
+
     const canvas = document.createElement("canvas");
-    const width = 1200;
-    const height = 620;
+    // Aspect ratio 2.2 : 1 (matches 176mm x 80mm PDF dimensions at ~305 DPI)
+    const width = 2112;
+    const height = 960;
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
 
-    // 1. Background gradient (Rich Dark Velvet Obsidian)
-    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-    bgGrad.addColorStop(0, "#190610");
-    bgGrad.addColorStop(0.5, "#0D0308");
-    bgGrad.addColorStop(1, "#1C0614");
-    ctx.fillStyle = bgGrad;
+    const toothIndent = 32;
+    const toothCount = 18;
+    const toothHeight = height / toothCount;
+
+    // 1. Saw-tooth serrated clipping path on left & right
+    ctx.beginPath();
+    ctx.moveTo(toothIndent, 0);
+    ctx.lineTo(width - toothIndent, 0);
+
+    for (let i = 0; i < toothCount; i++) {
+      const yTop = i * toothHeight;
+      const yMid = (i + 0.5) * toothHeight;
+      const yBot = (i + 1) * toothHeight;
+      ctx.lineTo(width - toothIndent, yTop);
+      ctx.lineTo(width, yMid);
+      ctx.lineTo(width - toothIndent, yBot);
+    }
+
+    ctx.lineTo(toothIndent, height);
+
+    for (let i = toothCount - 1; i >= 0; i--) {
+      const yBot = (i + 1) * toothHeight;
+      const yMid = (i + 0.5) * toothHeight;
+      const yTop = i * toothHeight;
+      ctx.lineTo(toothIndent, yBot);
+      ctx.lineTo(0, yMid);
+      ctx.lineTo(toothIndent, yTop);
+    }
+    ctx.closePath();
+    ctx.clip();
+
+    // 2. Base Metallic Golden Foil Linear Gradient
+    const goldGrad = ctx.createLinearGradient(0, 0, width, 0);
+    goldGrad.addColorStop(0.0, "#C49220");
+    goldGrad.addColorStop(0.08, "#E6BF55");
+    goldGrad.addColorStop(0.2, "#FFF5BD");
+    goldGrad.addColorStop(0.35, "#D5A42E");
+    goldGrad.addColorStop(0.5, "#FFF7C6");
+    goldGrad.addColorStop(0.65, "#E2B743");
+    goldGrad.addColorStop(0.8, "#FEE382");
+    goldGrad.addColorStop(0.92, "#BE8917");
+    goldGrad.addColorStop(1.0, "#C49220");
+    ctx.fillStyle = goldGrad;
     ctx.fillRect(0, 0, width, height);
 
-    // 2. Outer golden metallic border
-    const goldGrad = ctx.createLinearGradient(0, 0, width, 0);
-    goldGrad.addColorStop(0, "#B45309");
-    goldGrad.addColorStop(0.2, "#FDE68A");
-    goldGrad.addColorStop(0.5, "#F59E0B");
-    goldGrad.addColorStop(0.8, "#FEF08A");
-    goldGrad.addColorStop(1, "#B45309");
+    // Subtle horizontal brushed foil streaks
+    for (let y = 0; y < height; y += 4) {
+      const opacity = 0.02 + Math.sin(y * 0.15) * 0.02;
+      ctx.fillStyle =
+        y % 8 === 0
+          ? `rgba(255, 255, 255, ${opacity * 1.8})`
+          : `rgba(120, 75, 10, ${opacity})`;
+      ctx.fillRect(0, y, width, 2);
+    }
 
-    // Top and bottom shimmer gold banners
-    ctx.fillStyle = goldGrad;
-    ctx.fillRect(0, 0, width, 12);
-    ctx.fillRect(0, height - 10, width, 10);
+    // 3. Top Left Factory Stamp
+    drawFactoryStamp(ctx, 230, 195, 95);
 
-    ctx.strokeStyle = "#F59E0B";
-    ctx.lineWidth = 3;
-    ctx.strokeRect(6, 6, width - 12, height - 12);
-
-    ctx.strokeStyle = "rgba(245, 158, 11, 0.4)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(18, 18, width - 36, height - 36);
-
-    // 3. Perforated vertical separator line (at x = 860)
-    const perfX = 860;
-    ctx.strokeStyle = "rgba(245, 158, 11, 0.45)";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 6]);
-    ctx.beginPath();
-    ctx.moveTo(perfX, 22);
-    ctx.lineTo(perfX, height - 22);
-    ctx.stroke();
-    ctx.setLineDash([]); // reset
-
-    // Half-circle notch cutouts
-    ctx.fillStyle = "#040204";
-    ctx.beginPath();
-    ctx.arc(perfX, 0, 22, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#F59E0B";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(perfX, height, 22, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // 4. Logo Crest (Circle badge)
-    ctx.save();
-    ctx.fillStyle = goldGrad;
-    ctx.beginPath();
-    ctx.arc(65, 75, 26, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#000000";
-    ctx.font = "bold 22px Georgia, serif";
+    // 4. Center Top Vintage Script: "Wonka"
+    ctx.fillStyle = "#150D06";
+    ctx.font = "142px 'Great Vibes', 'Alex Brush', cursive";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("LB", 65, 75);
+    ctx.fillText("Wonka", width / 2, 195);
+
+    // 5. Upper Horizontal Divider Line
+    const dividerMargin = toothIndent + 40;
+    ctx.fillStyle = "#150D06";
+    ctx.fillRect(dividerMargin, 280, width - dividerMargin * 2, 4.5);
+
+    // 6. Giant Bold Compressed Headline: "GOLDEN TICKET"
+    ctx.fillStyle = "#150D06";
+    ctx.save();
+    ctx.translate(width / 2, 435);
+    ctx.scale(0.92, 1.25);
+    ctx.font = "900 152px 'Cinzel', 'Playfair Display', Georgia, serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.letterSpacing = "10px";
+    ctx.fillText("GOLDEN TICKET", 0, 0);
     ctx.restore();
 
-    // 5. Header texts
-    ctx.fillStyle = "#FFFFFF";
-    ctx.font = "bold 24px Georgia, serif";
-    ctx.textAlign = "left";
-    ctx.fillText("LONTHA BOYS PARTY SAGA", 105, 66);
+    // 7. Lower Horizontal Divider Line
+    ctx.fillStyle = "#150D06";
+    ctx.fillRect(dividerMargin, 555, width - dividerMargin * 2, 4.5);
 
-    ctx.fillStyle = "#F59E0B";
-    ctx.font = "bold 11px monospace";
-    ctx.fillText("OCTOBER 2026 • OFFICIAL RETREAT CREDENTIAL", 105, 88);
+    // 8. Three Information Columns with Party Details
+    const col1X = 380;
+    const col2X = 980;
+    const col3X = 1580;
 
-    // VIP Pass pill on right of header
-    ctx.fillStyle = "rgba(245, 158, 11, 0.18)";
-    ctx.strokeStyle = "#F59E0B";
+    // Headers
+    ctx.fillStyle = "#2D1D10";
+    ctx.font = "bold 26px 'Cinzel', Georgia, serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.letterSpacing = "3px";
+    ctx.fillText("DATE", col1X, 605);
+    ctx.fillText("TIME", col2X, 605);
+    ctx.fillText("PLACE", col3X, 605);
+
+    // Values (Party Details)
+    ctx.fillStyle = "#150D06";
+    ctx.font = "bold 52px 'Cinzel', Georgia, serif";
+    ctx.fillText("OCT. 30", col1X, 665);
+    ctx.fillText("8:00 P.M.", col2X, 665);
+    ctx.fillText("CANTERBURY", col3X, 665);
+
+    // Subtext Details
+    ctx.font = "bold 22px 'Cinzel', Georgia, serif";
+    ctx.fillStyle = "#3D2714";
+    ctx.fillText("2026 RETREAT", col1X, 715);
+    ctx.fillText("(CHECK-IN 2 P.M.)", col2X, 715);
+    ctx.fillText("KANDY RESORT", col3X, 715);
+
+    // 9. Personalized VIP Inscription Row
+    ctx.strokeStyle = "rgba(21, 13, 6, 0.35)";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(640, 52, 190, 36, 18);
-    ctx.fill();
+    ctx.moveTo(dividerMargin + 50, 760);
+    ctx.lineTo(width - dividerMargin - 50, 760);
     ctx.stroke();
 
-    ctx.fillStyle = "#FEF08A";
-    ctx.font = "bold 12px monospace";
+    ctx.fillStyle = "#1A1008";
+    ctx.font = "bold 28px 'Cinzel', Georgia, serif";
     ctx.textAlign = "center";
-    ctx.fillText("GOLDEN VIP PASS", 735, 74);
+    ctx.letterSpacing = "2px";
+    ctx.fillText(`PRESENTED TO: ${effectiveGuestName.toUpperCase()}`, width / 2, 800);
 
-    // Horizontal divider line
-    ctx.strokeStyle = "rgba(245, 158, 11, 0.25)";
-    ctx.beginPath();
-    ctx.moveTo(40, 120);
-    ctx.lineTo(820, 120);
-    ctx.stroke();
+    ctx.font = "bold 18px monospace";
+    ctx.fillStyle = "#3D2714";
+    ctx.fillText(
+      `SERIAL: ${ticketSerial}   •   SECURITY KEY: LBO26   •   ${accessTier.toUpperCase()}`,
+      width / 2,
+      838
+    );
 
-    // 6. Guest Name Section
-    ctx.fillStyle = "#9CA3AF";
-    ctx.font = "12px monospace";
-    ctx.textAlign = "left";
-    ctx.fillText("ADMIT VIP PASS HOLDER:", 40, 155);
-
-    // Large Golden Name
-    const nameGrad = ctx.createLinearGradient(40, 0, 700, 0);
-    nameGrad.addColorStop(0, "#FEF08A");
-    nameGrad.addColorStop(0.5, "#FDE047");
-    nameGrad.addColorStop(1, "#F59E0B");
-    ctx.fillStyle = nameGrad;
-    ctx.font = "bold 46px Georgia, serif";
-    ctx.fillText(effectiveGuestName, 40, 215);
-
-    // Access Tier Badge
-    ctx.fillStyle = "rgba(245, 158, 11, 0.2)";
-    ctx.strokeStyle = "rgba(245, 158, 11, 0.5)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(40, 240, 260, 32, 8);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = "#FDE68A";
-    ctx.font = "bold 13px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(accessTier, 170, 261);
-
-    // Gate Security Key
-    ctx.fillStyle = "#E5E7EB";
-    ctx.font = "13px monospace";
-    ctx.textAlign = "left";
-    ctx.fillText("Security Gate Passcode: ", 320, 261);
-    ctx.fillStyle = "#EF4444";
-    ctx.font = "bold 16px monospace";
-    ctx.fillText("LBO26", 515, 261);
-
-    // 7. Event details bottom boxes
-    ctx.strokeStyle = "rgba(245, 158, 11, 0.25)";
-    ctx.beginPath();
-    ctx.moveTo(40, 460);
-    ctx.lineTo(820, 460);
-    ctx.stroke();
-
-    // Dates
-    ctx.fillStyle = "#9CA3AF";
-    ctx.font = "11px monospace";
-    ctx.fillText("RETREAT DATES", 40, 490);
-    ctx.fillStyle = "#FFFFFF";
-    ctx.font = "bold 18px Georgia, serif";
-    ctx.fillText("Oct 30 - Nov 1, 2026", 40, 520);
-    ctx.fillStyle = "#EF4444";
-    ctx.font = "12px monospace";
-    ctx.fillText("3 Days / 2 Nights Saga", 40, 545);
-
-    // Venue
-    ctx.fillStyle = "#9CA3AF";
-    ctx.font = "11px monospace";
-    ctx.fillText("RESORT VENUE", 310, 490);
-    ctx.fillStyle = "#FFFFFF";
-    ctx.font = "bold 18px Georgia, serif";
-    ctx.fillText("Canterbury Nature Resort", 310, 520);
-    ctx.fillStyle = "#9CA3AF";
-    ctx.font = "12px sans-serif";
-    ctx.fillText("Udawela Road, Kandy, Sri Lanka", 310, 545);
-
-    // Serial Hash
-    ctx.fillStyle = "#9CA3AF";
-    ctx.font = "11px monospace";
-    ctx.fillText("PASS SERIAL HASH", 610, 490);
-    ctx.fillStyle = "#F59E0B";
-    ctx.font = "bold 16px monospace";
-    ctx.fillText(ticketSerial, 610, 520);
-    ctx.fillStyle = "#10B981";
-    ctx.font = "11px monospace";
-    ctx.fillText("✓ VERIFIED CREDENTIAL", 610, 545);
-
-    // 8. RIGHT STUB: QR Code & Verification
-    ctx.fillStyle = "#F59E0B";
-    ctx.font = "bold 12px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("SCAN TO VERIFY", 1030, 65);
-
-    ctx.fillStyle = "#FFFFFF";
-    ctx.font = "bold 15px Georgia, serif";
-    ctx.fillText("GATE CHECK-IN", 1030, 90);
-
-    // Draw QR Code Image
+    // 10. QR Code Seal on Right Side
     if (qrDataUrl) {
       const qrImg = new Image();
       qrImg.crossOrigin = "anonymous";
@@ -303,124 +345,177 @@ export default function GoldenTicketSection({ activeAccount }) {
         else qrImg.onload = resolve;
       });
 
-      // Background card for QR
-      ctx.fillStyle = "#FFFBEB";
+      const qrSize = 175;
+      const qrX = width - toothIndent - 235;
+      const qrY = 595;
+
+      ctx.fillStyle = "#FDF7C8";
       ctx.beginPath();
-      ctx.roundRect(915, 120, 230, 230, 16);
+      ctx.roundRect(qrX - 8, qrY - 8, qrSize + 16, qrSize + 16, 10);
       ctx.fill();
-      ctx.strokeStyle = "#F59E0B";
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#1A1008";
+      ctx.lineWidth = 2.5;
       ctx.stroke();
 
-      ctx.drawImage(qrImg, 925, 130, 210, 210);
+      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
     }
 
-    // Barcode Graphic Lines
-    const barStartY = 420;
-    const barStartX = 915;
-    ctx.fillStyle = "#F59E0B";
-    const barWidths = [3, 1, 4, 2, 5, 1, 3, 2, 4, 1, 2, 5, 2, 3, 1, 4, 2, 3, 5, 2, 1, 4, 2, 3, 1, 4];
-    let curX = barStartX + 10;
-    barWidths.forEach((w) => {
-      ctx.fillRect(curX, barStartY, w, 28);
-      curX += w + 4;
-    });
-
-    ctx.fillStyle = "#FEF08A";
-    ctx.font = "bold 11px monospace";
-    ctx.fillText("ADMIT ONE • ALL ACCESS", 1030, 480);
-
-    ctx.fillStyle = "#EF4444";
-    ctx.font = "10px monospace";
-    ctx.fillText("NO ENTRY WITHOUT PASS", 1030, 510);
+    // 11. Bottom Admittance Guarantee Banner
+    ctx.fillStyle = "#150D06";
+    ctx.font = "bold 24px 'Cinzel', Georgia, serif";
+    ctx.textAlign = "center";
+    ctx.letterSpacing = "4px";
+    ctx.fillText(
+      "THIS GOLDEN TICKET ENSURES ADMITTANCE TO LONTHA BOYS PARTY SAGA.",
+      width / 2,
+      905
+    );
 
     return canvas;
   };
 
-  const handleDownloadPdf = async () => {
+  // TRUE-SIZE POCKET TICKET PDF (176mm x 80mm, Pixel-Perfect)
+  const handleDownloadPocketPdf = async () => {
     setIsGeneratingPdf(true);
     setDownloadSuccess(false);
 
     try {
-      const canvas = await createGoldenTicketCanvas();
-      const imgData = canvas.toDataURL("image/jpeg", 0.98);
+      const canvas = await createWonkaCanvas();
+      const imgData = canvas.toDataURL("image/png");
 
-      // Create landscape A5 PDF (210mm x 148mm)
+      const ticketWidthMm = 176;
+      const ticketHeightMm = 80;
+
       const pdf = new jsPDF({
         orientation: "landscape",
         unit: "mm",
-        format: "a5",
+        format: [ticketHeightMm, ticketWidthMm],
       });
 
-      // Page width: 210mm, height: 148mm
-      pdf.addImage(imgData, "JPEG", 0, 0, 210, 148);
+      pdf.addImage(imgData, "PNG", 0, 0, ticketWidthMm, ticketHeightMm, undefined, "FAST");
 
-      const filename = `Lontha_Boys_Golden_VIP_Pass_${effectiveGuestName.replace(
-        /[^a-zA-Z0-9_-]/g,
-        "_"
-      )}.pdf`;
+      const safeName = effectiveGuestName.replace(/[^a-zA-Z0-9_-]/g, "_");
+      pdf.save(`Lontha_Boys_Wonka_Golden_Ticket_${safeName}.pdf`);
 
-      pdf.save(filename);
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 4000);
     } catch (err) {
-      console.error("PDF generation failed:", err);
-      alert(`PDF generation failed: ${err.message || "Unknown error"}`);
+      console.error("Pocket PDF generation failed:", err);
+      alert(`PDF download error: ${err.message || "Failed to generate PDF"}`);
     } finally {
       setIsGeneratingPdf(false);
     }
   };
 
-  const handleDownloadImage = async () => {
+  // A4 PRINTABLE SHEET PDF (Centered on standard A4 paper with scissor cut marks)
+  const handleDownloadA4PrintablePdf = async () => {
+    setIsGeneratingPdf(true);
+    setDownloadSuccess(false);
+
     try {
-      const canvas = await createGoldenTicketCanvas();
+      const canvas = await createWonkaCanvas();
+      const imgData = canvas.toDataURL("image/png");
+
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const pageW = 210;
+      const ticketW = 176;
+      const ticketH = 80;
+      const posX = (pageW - ticketW) / 2;
+      const posY = 55;
+
+      pdf.setDrawColor(160, 120, 60);
+      pdf.setLineDashPattern([2.5, 2.5], 0);
+      pdf.rect(posX - 1.5, posY - 1.5, ticketW + 3, ticketH + 3);
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(110, 80, 40);
+      pdf.text(
+        "✂  CUT ALONG DASHED LINE FOR PHYSICAL WONKA GOLDEN TICKET  ✂",
+        pageW / 2,
+        posY - 5,
+        { align: "center" }
+      );
+
+      pdf.addImage(imgData, "PNG", posX, posY, ticketW, ticketH, undefined, "FAST");
+
+      pdf.setFont("times", "italic");
+      pdf.setFontSize(10);
+      pdf.setTextColor(90, 70, 40);
+      pdf.text(
+        "Lontha Boys Party Saga • Oct 30 - Nov 1, 2026 • Canterbury Nature Resort, Kandy • Code: LBO26",
+        pageW / 2,
+        posY + ticketH + 15,
+        { align: "center" }
+      );
+
+      const safeName = effectiveGuestName.replace(/[^a-zA-Z0-9_-]/g, "_");
+      pdf.save(`Lontha_Boys_Wonka_Ticket_A4_Print_${safeName}.pdf`);
+
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 4000);
+    } catch (err) {
+      console.error("A4 PDF generation failed:", err);
+      alert(`A4 PDF download error: ${err.message || "Failed to generate PDF"}`);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  // High-Resolution 300 DPI PNG Download
+  const handleDownloadPng = async () => {
+    try {
+      const canvas = await createWonkaCanvas();
       const link = document.createElement("a");
-      link.download = `Lontha_Boys_Golden_Ticket_${effectiveGuestName.replace(
-        /[^a-zA-Z0-9_-]/g,
-        "_"
-      )}.png`;
+      const safeName = effectiveGuestName.replace(/[^a-zA-Z0-9_-]/g, "_");
+      link.download = `Lontha_Boys_Wonka_Golden_Ticket_${safeName}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
     } catch (err) {
-      console.error("Image export failed:", err);
+      console.error("PNG export error:", err);
     }
   };
 
   return (
     <section
       id="vip-ticket"
-      className="glass-panel-crimson rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-amber-500/40 relative overflow-hidden"
+      className="glass-panel-crimson rounded-2xl sm:rounded-3xl p-3 sm:p-8 border border-amber-500/40 relative overflow-hidden"
     >
-      {/* Golden Aura Background */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-red-600/10 rounded-full blur-3xl pointer-events-none"></div>
+      {/* Golden Aura Background Glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-gradient-to-r from-amber-500/15 via-yellow-400/15 to-red-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
       {/* Section Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 relative z-10">
         <div>
-          <span className="text-[9px] sm:text-[10px] font-semibold text-amber-400 tracking-[0.25em] uppercase flex items-center gap-1.5">
-            <i className="fa-solid fa-crown text-amber-400"></i> Official VIP Credential
+          <span className="text-[10px] font-semibold text-amber-400 tracking-[0.25em] uppercase flex items-center gap-1.5">
+            <i className="fa-solid fa-crown text-amber-400"></i> Official Lontha Boys 2026 Pass
           </span>
-          <h2 className="text-xl sm:text-3xl font-serif-title font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-400 mt-0.5 sm:mt-1">
-            GOLDEN VIP TICKET GENERATOR
+          <h2 className="text-xl sm:text-3xl font-serif-title font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-400 mt-1">
+            WONKA GOLDEN TICKET GENERATOR
           </h2>
-          <p className="text-[11px] sm:text-xs text-gray-300 mt-0.5">
-            Select your alias or name to generate an official personalized Golden Pass with encrypted QR verification.
+          <p className="text-xs text-gray-300 mt-0.5">
+            Featuring your Lontha Boys party dates, Kandy resort venue, security key, serrated edges, and pixel-perfect mobile &amp; laptop scaling.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-black/80 px-3 py-1.5 rounded-xl border border-amber-500/40 text-xs text-amber-300 w-fit">
-          <i className="fa-solid fa-qrcode text-amber-400"></i>
-          <span>Live QR &amp; PDF Export</span>
+        <div className="flex items-center gap-2 bg-black/80 px-3.5 py-1.5 rounded-xl border border-amber-500/40 text-xs text-amber-300 w-fit shrink-0">
+          <i className="fa-solid fa-database text-amber-400"></i>
+          <span>Atlas DB Connected</span>
         </div>
       </div>
 
       {/* Generator Controls Form */}
-      <div className="max-w-4xl mx-auto mb-8 bg-black/80 p-4 sm:p-5 rounded-2xl border border-amber-500/30 relative z-10 shadow-lg">
+      <div className="max-w-4xl mx-auto mb-6 bg-black/85 p-3.5 sm:p-5 rounded-2xl border border-amber-500/35 relative z-10 shadow-xl">
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-end">
           {/* Guest Name Selection */}
-          <div className="sm:col-span-5 space-y-1">
+          <div className="sm:col-span-6 space-y-1">
             <label className="block text-[11px] font-semibold text-amber-200 uppercase tracking-wider">
-              1. Select Guest Name / Alias
+              1. Guest of Honor / Alias
             </label>
             <div className="relative">
               <select
@@ -453,9 +548,9 @@ export default function GoldenTicketSection({ activeAccount }) {
           </div>
 
           {/* Access Tier */}
-          <div className="sm:col-span-4 space-y-1">
+          <div className="sm:col-span-3 space-y-1">
             <label className="block text-[11px] font-semibold text-amber-200 uppercase tracking-wider">
-              2. VIP Access Tier
+              2. VIP Tier
             </label>
             <select
               value={accessTier}
@@ -469,197 +564,302 @@ export default function GoldenTicketSection({ activeAccount }) {
             </select>
           </div>
 
-          {/* Regenerate Code */}
+          {/* Regenerate Serial */}
           <div className="sm:col-span-3">
             <button
               type="button"
               onClick={handleRegenerateSerial}
-              className="w-full py-2.5 px-4 rounded-xl font-serif-title font-bold text-xs uppercase tracking-widest bg-white/10 hover:bg-white/15 border border-amber-500/40 text-amber-200 shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 px-3 rounded-xl font-serif-title font-bold text-xs uppercase tracking-wider bg-white/10 hover:bg-white/15 border border-amber-500/40 text-amber-200 shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
             >
               <i className="fa-solid fa-arrows-rotate"></i>
-              <span>New Passcode</span>
+              <span>New Serial Key</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* THE GOLDEN VIP TICKET DISPLAY CARD */}
+      {/* THE PROPORTIONAL WONKA GOLDEN TICKET DISPLAY */}
+      {/* Container query ensures MOBILE and LAPTOP display identical aspect ratio and typography */}
       <div className="max-w-4xl mx-auto mb-6 relative z-10">
         {/* Action Bar Above Ticket */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
             <span className="text-xs text-amber-200 font-mono font-bold tracking-wider">
-              PASS SERIAL: {ticketSerial}
+              NO. {ticketSerial}
             </span>
             {downloadSuccess && (
-              <span className="text-xs text-emerald-400 font-bold ml-2 animate-bounce">
-                ✓ PDF Downloaded!
+              <span className="text-xs text-emerald-400 font-bold ml-2 animate-bounce flex items-center gap-1">
+                <i className="fa-solid fa-circle-check"></i> True-Size PDF Downloaded!
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Download Buttons Group */}
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              onClick={handleDownloadPdf}
+              onClick={handleDownloadPocketPdf}
               disabled={isGeneratingPdf}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-black font-serif-title font-bold text-xs uppercase tracking-wider shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-black font-wonka-title font-bold text-xs uppercase tracking-wider shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              title="Compact 176mm x 80mm pocket golden ticket PDF"
             >
               <i className="fa-solid fa-file-pdf"></i>
-              <span>{isGeneratingPdf ? "Generating PDF..." : "Download PDF"}</span>
+              <span>{isGeneratingPdf ? "Generating..." : "Download Ticket (PDF)"}</span>
             </button>
 
             <button
               type="button"
-              onClick={handleDownloadImage}
-              className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-serif-title font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
-              title="Download PNG image"
+              onClick={handleDownloadA4PrintablePdf}
+              disabled={isGeneratingPdf}
+              className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-amber-500/40 text-amber-200 font-wonka-title font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="A4 Printable Sheet with scissor cutting guide"
+            >
+              <i className="fa-solid fa-scissors text-amber-400"></i>
+              <span>Print Sheet (A4)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadPng}
+              className="px-3 py-2 rounded-xl bg-black/60 hover:bg-black/90 border border-white/20 text-gray-200 font-wonka-title font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Download 300 DPI PNG"
             >
               <i className="fa-solid fa-image"></i>
-              <span className="hidden sm:inline">Save Image</span>
+              <span>PNG</span>
             </button>
           </div>
         </div>
 
-        {/* Ticket Visual UI */}
+        {/* CONTAINER QUERY WRAPPER FOR MATHEMATICALLY IDENTICAL MOBILE & LAPTOP PRESENTATION */}
         <div
-          ref={ticketDisplayRef}
-          className="w-full rounded-3xl overflow-hidden relative shadow-[0_15px_60px_-15px_rgba(245,158,11,0.35)] border-2 border-amber-400/80 bg-gradient-to-br from-[#16060E] via-[#0E0308] to-[#1F0814]"
-          style={{ minHeight: "260px" }}
+          className="w-full @container"
+          style={{ containerType: "inline-size" }}
         >
-          {/* Shimmer Gold Top Edge Banner */}
-          <div className="h-2 w-full bg-gradient-to-r from-amber-600 via-yellow-300 to-amber-500"></div>
+          <div
+            ref={ticketCardRef}
+            className="w-full relative shadow-[0_20px_60px_-15px_rgba(234,179,8,0.45)] select-none overflow-hidden rounded-md"
+            style={{
+              aspectRatio: "2.2 / 1",
+              background:
+                "linear-gradient(90deg, #C28E1E 0%, #E8C156 10%, #FFF3B8 22%, #D5A42E 36%, #FFF8C9 50%, #E2B743 65%, #FEE382 80%, #BE8917 92%, #C28E1E 100%)",
+              color: "#150D06",
+            }}
+          >
+            {/* Saw-tooth Perforated Edges on Left and Right */}
+            <div
+              className="absolute left-0 top-0 bottom-0 z-20 pointer-events-none"
+              style={{
+                width: "1.5cqw",
+                background:
+                  "radial-gradient(circle at 0px 50%, transparent 60%, #040204 62%)",
+                backgroundSize: "1.5cqw 5.5cqh",
+              }}
+            ></div>
+            <div
+              className="absolute right-0 top-0 bottom-0 z-20 pointer-events-none"
+              style={{
+                width: "1.5cqw",
+                background:
+                  "radial-gradient(circle at 100% 50%, transparent 60%, #040204 62%)",
+                backgroundSize: "1.5cqw 5.5cqh",
+              }}
+            ></div>
 
-          {/* Ticket Flex Layout */}
-          <div className="flex flex-col md:flex-row items-stretch">
-            {/* LEFT / MAIN VIP PASS STUB */}
-            <div className="flex-1 p-5 sm:p-7 relative overflow-hidden flex flex-col justify-between">
-              {/* Top Row: Event Brand & Pass Type */}
-              <div className="flex items-center justify-between gap-3 border-b border-amber-500/20 pb-3 mb-4">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 to-yellow-400 flex items-center justify-center text-black font-serif-title font-bold text-sm shadow-md shrink-0">
-                    LB
-                  </div>
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-serif-title font-bold tracking-widest text-white leading-tight uppercase">
-                      LONTHA BOYS PARTY SAGA
-                    </h4>
-                    <p className="text-[8px] text-amber-400 tracking-[0.2em] uppercase font-mono">
-                      OCTOBER 2026 • RETREAT PASS
-                    </p>
-                  </div>
-                </div>
-
-                <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/40 text-[9px] font-bold uppercase tracking-widest shrink-0">
-                  GOLDEN VIP PASS
-                </span>
-              </div>
-
-              {/* Middle: Guest Name & Access Tier */}
-              <div className="space-y-1.5 my-2">
-                <span className="text-[9px] uppercase tracking-[0.25em] text-gray-400 block font-mono">
-                  ADMIT VIP PASS HOLDER:
-                </span>
-                <h3 className="text-2xl sm:text-4xl font-serif-title font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-400 tracking-wide leading-tight">
-                  {effectiveGuestName}
-                </h3>
-                <div className="flex items-center gap-2 pt-1 flex-wrap">
-                  <span className="px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-300 border border-amber-400/30 text-[10px] font-bold font-mono">
-                    {accessTier}
-                  </span>
-                  <span className="text-[10px] text-gray-400 font-mono">
-                    Gate Key: <strong className="text-white">LBO26</strong>
-                  </span>
-                </div>
-              </div>
-
-              {/* Bottom Row: Dates, Venue, Security Stamp */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 border-t border-amber-500/20 pt-3 mt-4 text-[10px]">
-                <div>
-                  <span className="text-[8px] text-gray-500 uppercase block font-mono">
-                    Dates
-                  </span>
-                  <strong className="text-amber-100 block font-serif-title text-xs">
-                    Oct 30 - Nov 1, 2026
-                  </strong>
-                </div>
-                <div>
-                  <span className="text-[8px] text-gray-500 uppercase block font-mono">
-                    Resort Venue
-                  </span>
-                  <strong className="text-amber-100 block font-serif-title text-xs truncate">
-                    Canterbury Resort, Kandy
-                  </strong>
-                </div>
-                <div className="col-span-2 sm:col-span-1 flex items-center justify-end">
-                  <div className="text-right">
-                    <span className="text-[8px] text-amber-400/80 uppercase block font-mono">
-                      Security Hash
+            {/* Ticket Surface Layout using cqw units for exact mobile & laptop parity */}
+            <div
+              className="w-full h-full relative z-10 flex flex-col justify-between"
+              style={{
+                padding: "3.2cqw 4.5cqw 2.8cqw 4.5cqw",
+              }}
+            >
+              {/* Top Row: Factory Stamp + "Wonka" Script Logo + QR Badge */}
+              <div className="relative flex items-center justify-center w-full">
+                {/* Circular Factory Stamp (Top Left) */}
+                <div
+                  className="absolute left-0 top-1/2 -translate-y-1/2 flex items-center justify-center rounded-full border border-[#1A1008] p-0.5 opacity-90"
+                  style={{ width: "9.5cqw", height: "9.5cqw" }}
+                >
+                  <div className="w-full h-full rounded-full border border-dashed border-[#1A1008] flex flex-col items-center justify-center text-center p-0.5">
+                    <span
+                      className="font-bold tracking-widest uppercase font-wonka-title leading-none"
+                      style={{ fontSize: "0.8cqw" }}
+                    >
+                      LONTHA BOYS
                     </span>
-                    <span className="font-mono text-[9px] text-gray-400">
-                      {ticketSerial}
+                    <i
+                      className="fa-solid fa-industry text-[#1A1008]"
+                      style={{ fontSize: "1.8cqw", margin: "0.2cqw 0" }}
+                    ></i>
+                    <span
+                      className="font-bold font-mono tracking-widest text-[#1A1008]"
+                      style={{ fontSize: "0.7cqw" }}
+                    >
+                      OCT 2026
                     </span>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* PERFORATED COUPON SEPARATOR LINE */}
-            <div className="relative flex md:flex-col items-center justify-between border-t md:border-t-0 md:border-l-2 border-dashed border-amber-400/40 bg-black/40 px-3 py-2 md:px-0">
-              {/* Top Notch Hole */}
-              <div className="hidden md:block w-5 h-5 rounded-full bg-[#040204] -mt-3.5 -ml-2.5 border border-amber-400/30"></div>
-              {/* Bottom Notch Hole */}
-              <div className="hidden md:block w-5 h-5 rounded-full bg-[#040204] -mb-3.5 -ml-2.5 border border-amber-400/30"></div>
-            </div>
+                {/* Center "Wonka" script */}
+                <h1
+                  className="font-wonka-script text-[#150D06] tracking-wide select-none leading-none"
+                  style={{ fontSize: "6.8cqw" }}
+                >
+                  Wonka
+                </h1>
 
-            {/* RIGHT / QR CODE VERIFICATION STUB */}
-            <div className="w-full md:w-56 p-5 sm:p-6 bg-gradient-to-b from-black/80 via-neutral-950 to-black/90 flex flex-col items-center justify-between text-center gap-3">
-              <div className="w-full text-center">
-                <span className="text-[8px] tracking-[0.2em] uppercase font-mono text-amber-300 block">
-                  SCAN TO VERIFY
-                </span>
-                <span className="text-[10px] font-bold font-serif-title text-white">
-                  GATE CHECK-IN
-                </span>
-              </div>
-
-              {/* QR Code Container */}
-              <div className="p-2 rounded-2xl bg-[#FFFBEB] border-2 border-amber-400 shadow-md">
-                {qrDataUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={qrDataUrl}
-                    alt="Golden Ticket VIP QR Code"
-                    className="w-28 h-28 sm:w-32 sm:h-32 object-contain"
-                  />
-                ) : (
-                  <div className="w-28 h-28 flex items-center justify-center text-xs text-gray-400">
-                    Generating QR...
+                {/* QR Verification Badge (Top Right) */}
+                <div
+                  className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-[#FDF7C8]/90 rounded border border-[#1A1008]/40 shadow-sm"
+                  style={{ padding: "0.4cqw" }}
+                >
+                  {qrDataUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={qrDataUrl}
+                      alt="Scan Golden Ticket"
+                      style={{ width: "5cqw", height: "5cqw" }}
+                      className="object-contain"
+                    />
+                  )}
+                  <div
+                    className="font-wonka-title font-bold leading-tight text-[#1A1008] hidden sm:block"
+                    style={{ fontSize: "0.8cqw" }}
+                  >
+                    <span>CANTERBURY</span>
+                    <br />
+                    <span>VERIFIED</span>
                   </div>
-                )}
+                </div>
               </div>
 
-              {/* Passcode Reminder & Barcode Lines */}
-              <div className="w-full space-y-1">
-                <div className="h-3 w-3/4 mx-auto flex items-end justify-center gap-0.5 opacity-60">
-                  <span className="w-1 h-3 bg-amber-400"></span>
-                  <span className="w-0.5 h-2 bg-amber-200"></span>
-                  <span className="w-1.5 h-3 bg-amber-400"></span>
-                  <span className="w-0.5 h-1.5 bg-amber-200"></span>
-                  <span className="w-1 h-3 bg-amber-400"></span>
-                  <span className="w-2 h-2.5 bg-amber-400"></span>
-                  <span className="w-0.5 h-3 bg-amber-200"></span>
+              {/* Divider Line 1 (Above Title) */}
+              <div
+                className="bg-[#150D06] w-full"
+                style={{ height: "0.25cqw", margin: "0.6cqw 0" }}
+              ></div>
+
+              {/* Main Title: GOLDEN TICKET (Giant Compressed Slab Serif) */}
+              <div className="text-center w-full">
+                <h2
+                  className="font-wonka-title font-black text-[#150D06] uppercase leading-none drop-shadow-sm select-none"
+                  style={{
+                    fontSize: "7.2cqw",
+                    letterSpacing: "0.4cqw",
+                  }}
+                >
+                  GOLDEN TICKET
+                </h2>
+              </div>
+
+              {/* Divider Line 2 (Below Title) */}
+              <div
+                className="bg-[#150D06] w-full"
+                style={{ height: "0.25cqw", margin: "0.6cqw 0" }}
+              ></div>
+
+              {/* Three Information Columns with Party Details */}
+              <div className="grid grid-cols-3 gap-1 text-center w-full">
+                <div>
+                  <span
+                    className="block font-wonka-title font-bold tracking-widest text-[#2D1D10]"
+                    style={{ fontSize: "1.3cqw" }}
+                  >
+                    DATE
+                  </span>
+                  <span
+                    className="block font-wonka-title font-extrabold text-[#150D06] tracking-wide leading-tight"
+                    style={{ fontSize: "2.6cqw", marginTop: "0.2cqw" }}
+                  >
+                    OCT. 30 - NOV. 1
+                  </span>
+                  <span
+                    className="block font-wonka-title font-bold text-[#3D2714]"
+                    style={{ fontSize: "1.1cqw", marginTop: "0.1cqw" }}
+                  >
+                    2026 RETREAT
+                  </span>
                 </div>
-                <p className="text-[9px] font-mono font-bold text-amber-400">
-                  NO ENTRY WITHOUT PASS
+
+                <div>
+                  <span
+                    className="block font-wonka-title font-bold tracking-widest text-[#2D1D10]"
+                    style={{ fontSize: "1.3cqw" }}
+                  >
+                    TIME
+                  </span>
+                  <span
+                    className="block font-wonka-title font-extrabold text-[#150D06] tracking-wide leading-tight"
+                    style={{ fontSize: "2.6cqw", marginTop: "0.2cqw" }}
+                  >
+                    8:00 P.M.
+                  </span>
+                  <span
+                    className="block font-wonka-title font-bold text-[#3D2714]"
+                    style={{ fontSize: "1.1cqw", marginTop: "0.1cqw" }}
+                  >
+                    CHECK-IN: 2:00 P.M.
+                  </span>
+                </div>
+
+                <div>
+                  <span
+                    className="block font-wonka-title font-bold tracking-widest text-[#2D1D10]"
+                    style={{ fontSize: "1.3cqw" }}
+                  >
+                    PLACE
+                  </span>
+                  <span
+                    className="block font-wonka-title font-extrabold text-[#150D06] tracking-wide leading-tight truncate"
+                    style={{ fontSize: "2.6cqw", marginTop: "0.2cqw" }}
+                  >
+                    CANTERBURY RESORT
+                  </span>
+                  <span
+                    className="block font-wonka-title font-bold text-[#3D2714] truncate"
+                    style={{ fontSize: "1.1cqw", marginTop: "0.1cqw" }}
+                  >
+                    KANDY, SRI LANKA
+                  </span>
+                </div>
+              </div>
+
+              {/* Guest of Honor Inscription Row */}
+              <div
+                className="border-t border-[#150D06]/35 text-center w-full"
+                style={{
+                  paddingTop: "0.4cqw",
+                  marginTop: "0.4cqw",
+                }}
+              >
+                <p
+                  className="font-wonka-title font-bold tracking-wider text-[#1A1008] leading-tight"
+                  style={{ fontSize: "1.4cqw" }}
+                >
+                  PRESENTED TO:{" "}
+                  <strong className="underline decoration-[#150D06]/50">
+                    {effectiveGuestName.toUpperCase()}
+                  </strong>
                 </p>
+                <p
+                  className="font-mono text-[#3D2714] tracking-wider leading-tight"
+                  style={{ fontSize: "1.0cqw", marginTop: "0.1cqw" }}
+                >
+                  NO. {ticketSerial} • GATE CODE: LBO26 • {accessTier}
+                </p>
+              </div>
+
+              {/* Bottom Admittance Banner */}
+              <div className="text-center w-full" style={{ paddingTop: "0.2cqw" }}>
+                <span
+                  className="font-wonka-title font-bold tracking-[0.25em] uppercase text-[#150D06] block leading-none"
+                  style={{ fontSize: "1.25cqw" }}
+                >
+                  THIS GOLDEN TICKET ENSURES ADMITTANCE TO LONTHA BOYS PARTY SAGA.
+                </span>
               </div>
             </div>
           </div>
-
-          {/* Shimmer Gold Bottom Edge Banner */}
-          <div className="h-1.5 w-full bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-600"></div>
         </div>
       </div>
     </section>

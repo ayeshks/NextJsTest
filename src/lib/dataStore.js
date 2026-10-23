@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
+import { getDb } from "./mongodb";
 
 // Bundled read-only project directory on Vercel
 const BUNDLED_DIR = path.join(process.cwd(), "data");
@@ -15,12 +16,10 @@ if (!globalThis._lonthaPartyCache) {
 const memoryCache = globalThis._lonthaPartyCache;
 
 export async function readJson(filename, defaultData = []) {
-  // 1. Return from in-memory cache if available
   if (memoryCache[filename]) {
     return memoryCache[filename];
   }
 
-  // 2. On Vercel, check if file was previously written to TMP_DATA_DIR
   if (process.env.VERCEL) {
     try {
       const tmpFile = path.join(TMP_DATA_DIR, filename);
@@ -28,12 +27,9 @@ export async function readJson(filename, defaultData = []) {
       const parsed = JSON.parse(content);
       memoryCache[filename] = parsed;
       return parsed;
-    } catch (_) {
-      // Not in /tmp yet, proceed to bundled data
-    }
+    } catch (_) {}
   }
 
-  // 3. Read from bundled data directory
   try {
     const bundledFile = path.join(BUNDLED_DIR, filename);
     const content = await fs.readFile(bundledFile, "utf-8");
@@ -41,21 +37,14 @@ export async function readJson(filename, defaultData = []) {
     memoryCache[filename] = parsed;
     return parsed;
   } catch (error) {
-    if (error.code === "ENOENT") {
-      memoryCache[filename] = defaultData;
-      return defaultData;
-    }
-    console.warn(`Error reading ${filename}:`, error);
     memoryCache[filename] = defaultData;
     return defaultData;
   }
 }
 
 export async function writeJson(filename, data) {
-  // Always update in-memory cache first so all subsequent reads get latest data
   memoryCache[filename] = data;
 
-  // On local development, write to local data directory
   if (!process.env.VERCEL) {
     try {
       await fs.mkdir(BUNDLED_DIR, { recursive: true });
@@ -63,25 +52,63 @@ export async function writeJson(filename, data) {
       await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
       return true;
     } catch (localErr) {
-      console.warn(`Local write error for ${filename}, falling back:`, localErr.message);
+      console.warn(`Local write error for ${filename}:`, localErr.message);
     }
   }
 
-  // On Vercel / Serverless, write to /tmp where writes are permitted
   try {
     await fs.mkdir(TMP_DATA_DIR, { recursive: true });
     const tmpFile = path.join(TMP_DATA_DIR, filename);
     await fs.writeFile(tmpFile, JSON.stringify(data, null, 2), "utf-8");
     return true;
   } catch (tmpErr) {
-    console.warn(`Write to /tmp failed, kept in memory:`, tmpErr.message);
-    // Data is safely stored in memoryCache, so the operation succeeds!
     return true;
   }
 }
 
-// Helpers for specific data entities
+// ----------------------------------------------------
+// MONGODB ATLAS COLLECTION HELPERS (WITH AUTO SEEDING)
+// ----------------------------------------------------
+
+async function getCollectionWithSeed(collectionName, jsonFilename) {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    const col = db.collection(collectionName);
+    const count = await col.countDocuments();
+    if (count === 0) {
+      const initialData = await readJson(jsonFilename, []);
+      if (Array.isArray(initialData) && initialData.length > 0) {
+        // Clone items to avoid mutability issues
+        const cleanDocs = initialData.map((d) => ({ ...d }));
+        await col.insertMany(cleanDocs);
+        console.log(`Seeded MongoDB Atlas collection "${collectionName}" with ${cleanDocs.length} records.`);
+      }
+    }
+    return col;
+  } catch (err) {
+    console.warn(`MongoDB collection "${collectionName}" access error:`, err.message);
+    return null;
+  }
+}
+
+// ----------------------------------------------------
+// ACCOUNTS (PROFILES)
+// ----------------------------------------------------
 export async function getAccounts() {
+  const col = await getCollectionWithSeed("accounts", "accounts.json");
+  if (col) {
+    try {
+      const docs = await col.find({}).toArray();
+      // Remove Mongo _id before returning
+      const clean = docs.map(({ _id, ...rest }) => rest);
+      memoryCache["accounts.json"] = clean;
+      return clean;
+    } catch (err) {
+      console.warn("MongoDB getAccounts error:", err.message);
+    }
+  }
   return readJson("accounts.json", []);
 }
 
@@ -90,7 +117,8 @@ export async function saveAccount(accountData) {
   const existing = accounts.find(
     (a) =>
       a.id === accountData.id ||
-      a.alias.toLowerCase() === (accountData.alias || accountData.name || "").toLowerCase()
+      (a.alias || a.name || "").toLowerCase() ===
+        (accountData.alias || accountData.name || "").toLowerCase()
   );
 
   if (existing) {
@@ -109,19 +137,41 @@ export async function saveAccount(accountData) {
     createdAt: new Date().toISOString(),
   };
 
+  const col = await getCollectionWithSeed("accounts", "accounts.json");
+  if (col) {
+    try {
+      await col.insertOne({ ...newAccount });
+    } catch (err) {
+      console.warn("MongoDB saveAccount error:", err.message);
+    }
+  }
+
   accounts.push(newAccount);
   await writeJson("accounts.json", accounts);
   return newAccount;
 }
 
+// ----------------------------------------------------
+// VIP CHAT
+// ----------------------------------------------------
 export async function getChatMessages() {
-  const [messages, accounts] = await Promise.all([
-    readJson("chat.json", []),
-    getAccounts(),
-  ]);
+  let messages = [];
+  const col = await getCollectionWithSeed("chat", "chat.json");
+  if (col) {
+    try {
+      const docs = await col.find({}).sort({ createdAt: 1 }).toArray();
+      messages = docs.map(({ _id, ...rest }) => rest);
+    } catch (err) {
+      console.warn("MongoDB getChatMessages error:", err.message);
+      messages = await readJson("chat.json", []);
+    }
+  } else {
+    messages = await readJson("chat.json", []);
+  }
 
-  // Enrich chat with account details if available
+  const accounts = await getAccounts();
   const accountMap = new Map(accounts.map((a) => [a.id, a]));
+
   return messages.map((msg) => {
     const account = msg.accountId ? accountMap.get(msg.accountId) : null;
     return {
@@ -138,11 +188,7 @@ export async function getChatMessages() {
 }
 
 export async function addChatMessage({ sender, text, accountId }) {
-  const [messages, accounts] = await Promise.all([
-    readJson("chat.json", []),
-    getAccounts(),
-  ]);
-
+  const accounts = await getAccounts();
   let resolvedAccount = accounts.find(
     (a) => a.id === accountId || a.alias.toLowerCase() === sender.toLowerCase()
   );
@@ -163,6 +209,16 @@ export async function addChatMessage({ sender, text, accountId }) {
     createdAt: now.toISOString(),
   };
 
+  const col = await getCollectionWithSeed("chat", "chat.json");
+  if (col) {
+    try {
+      await col.insertOne({ ...newMsg });
+    } catch (err) {
+      console.warn("MongoDB addChatMessage error:", err.message);
+    }
+  }
+
+  const messages = await readJson("chat.json", []);
   messages.push(newMsg);
   await writeJson("chat.json", messages);
 
@@ -172,7 +228,21 @@ export async function addChatMessage({ sender, text, accountId }) {
   };
 }
 
+// ----------------------------------------------------
+// CHECKLIST (ITEMS)
+// ----------------------------------------------------
 export async function getItems() {
+  const col = await getCollectionWithSeed("items", "items.json");
+  if (col) {
+    try {
+      const docs = await col.find({}).toArray();
+      const clean = docs.map(({ _id, ...rest }) => rest);
+      memoryCache["items.json"] = clean;
+      return clean;
+    } catch (err) {
+      console.warn("MongoDB getItems error:", err.message);
+    }
+  }
   return readJson("items.json", []);
 }
 
@@ -181,19 +251,37 @@ export async function updateItemClaim(itemId, { claimedBy, claimedAccountId, sta
   const index = items.findIndex((i) => String(i.id) === String(itemId));
   if (index === -1) return null;
 
-  items[index] = {
+  const updatedItem = {
     ...items[index],
     status: status !== undefined ? status : !items[index].status,
     claimedBy: status === false ? "" : claimedBy || items[index].claimedBy,
     claimedAccountId: status === false ? null : claimedAccountId || items[index].claimedAccountId,
   };
 
+  const col = await getCollectionWithSeed("items", "items.json");
+  if (col) {
+    try {
+      await col.updateOne(
+        { id: String(itemId) },
+        {
+          $set: {
+            status: updatedItem.status,
+            claimedBy: updatedItem.claimedBy,
+            claimedAccountId: updatedItem.claimedAccountId,
+          },
+        }
+      );
+    } catch (err) {
+      console.warn("MongoDB updateItemClaim error:", err.message);
+    }
+  }
+
+  items[index] = updatedItem;
   await writeJson("items.json", items);
-  return items[index];
+  return updatedItem;
 }
 
 export async function addCustomItem({ name, category = "Custom" }) {
-  const items = await getItems();
   const newItem = {
     id: String(Date.now()),
     name,
@@ -202,24 +290,57 @@ export async function addCustomItem({ name, category = "Custom" }) {
     claimedAccountId: null,
     status: false,
   };
+
+  const col = await getCollectionWithSeed("items", "items.json");
+  if (col) {
+    try {
+      await col.insertOne({ ...newItem });
+    } catch (err) {
+      console.warn("MongoDB addCustomItem error:", err.message);
+    }
+  }
+
+  const items = await getItems();
   items.push(newItem);
   await writeJson("items.json", items);
   return newItem;
 }
 
 export async function deleteItem(itemId) {
+  const col = await getCollectionWithSeed("items", "items.json");
+  if (col) {
+    try {
+      await col.deleteOne({ id: String(itemId) });
+    } catch (err) {
+      console.warn("MongoDB deleteItem error:", err.message);
+    }
+  }
+
   const items = await getItems();
   const filtered = items.filter((i) => String(i.id) !== String(itemId));
   await writeJson("items.json", filtered);
   return true;
 }
 
+// ----------------------------------------------------
+// ATTENDEES (GUESTLIST)
+// ----------------------------------------------------
 export async function getAttendees() {
+  const col = await getCollectionWithSeed("attendees", "attendees.json");
+  if (col) {
+    try {
+      const docs = await col.find({}).toArray();
+      const clean = docs.map(({ _id, ...rest }) => rest);
+      memoryCache["attendees.json"] = clean;
+      return clean;
+    } catch (err) {
+      console.warn("MongoDB getAttendees error:", err.message);
+    }
+  }
   return readJson("attendees.json", []);
 }
 
 export async function addAttendee({ name, status, accountId }) {
-  const attendees = await getAttendees();
   const now = new Date();
   const timeStr = now.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
@@ -231,28 +352,56 @@ export async function addAttendee({ name, status, accountId }) {
     time: timeStr,
   };
 
+  const col = await getCollectionWithSeed("attendees", "attendees.json");
+  if (col) {
+    try {
+      await col.insertOne({ ...newAttendee });
+    } catch (err) {
+      console.warn("MongoDB addAttendee error:", err.message);
+    }
+  }
+
+  const attendees = await getAttendees();
   attendees.push(newAttendee);
   await writeJson("attendees.json", attendees);
   return newAttendee;
 }
 
 export async function deleteAttendee(id) {
+  const col = await getCollectionWithSeed("attendees", "attendees.json");
+  if (col) {
+    try {
+      await col.deleteOne({ id: String(id) });
+    } catch (err) {
+      console.warn("MongoDB deleteAttendee error:", err.message);
+    }
+  }
+
   const attendees = await getAttendees();
   const filtered = attendees.filter((a) => String(a.id) !== String(id));
   await writeJson("attendees.json", filtered);
   return true;
 }
 
+// ----------------------------------------------------
+// YOUTUBE DJ TRACKS
+// ----------------------------------------------------
 export async function getYoutubeTracks() {
+  const col = await getCollectionWithSeed("youtube_tracks", "youtube_tracks.json");
+  if (col) {
+    try {
+      const docs = await col.find({}).sort({ createdAt: -1 }).toArray();
+      const clean = docs.map(({ _id, ...rest }) => rest);
+      memoryCache["youtube_tracks.json"] = clean;
+      return clean;
+    } catch (err) {
+      console.warn("MongoDB getYoutubeTracks error:", err.message);
+    }
+  }
   return readJson("youtube_tracks.json", []);
 }
 
 export async function saveYoutubeTrack(trackData) {
-  const tracks = await getYoutubeTracks();
-  const existingIndex = tracks.findIndex(
-    (t) => t.url === trackData.url || (trackData.videoId && t.videoId === trackData.videoId)
-  );
-
   const newTrack = {
     id: trackData.id || `yt-${Date.now()}`,
     videoId: trackData.videoId || "",
@@ -265,6 +414,24 @@ export async function saveYoutubeTrack(trackData) {
     createdAt: new Date().toISOString(),
   };
 
+  const col = await getCollectionWithSeed("youtube_tracks", "youtube_tracks.json");
+  if (col) {
+    try {
+      await col.updateOne(
+        { $or: [{ url: newTrack.url }, { videoId: newTrack.videoId }] },
+        { $set: newTrack },
+        { upsert: true }
+      );
+    } catch (err) {
+      console.warn("MongoDB saveYoutubeTrack error:", err.message);
+    }
+  }
+
+  const tracks = await readJson("youtube_tracks.json", []);
+  const existingIndex = tracks.findIndex(
+    (t) => t.url === newTrack.url || (newTrack.videoId && t.videoId === newTrack.videoId)
+  );
+
   if (existingIndex >= 0) {
     tracks[existingIndex] = { ...tracks[existingIndex], ...newTrack };
   } else {
@@ -276,9 +443,17 @@ export async function saveYoutubeTrack(trackData) {
 }
 
 export async function deleteYoutubeTrack(id) {
+  const col = await getCollectionWithSeed("youtube_tracks", "youtube_tracks.json");
+  if (col) {
+    try {
+      await col.deleteOne({ id: String(id) });
+    } catch (err) {
+      console.warn("MongoDB deleteYoutubeTrack error:", err.message);
+    }
+  }
+
   const tracks = await getYoutubeTracks();
   const filtered = tracks.filter((t) => String(t.id) !== String(id));
   await writeJson("youtube_tracks.json", filtered);
   return true;
 }
-

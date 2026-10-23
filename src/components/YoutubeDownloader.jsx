@@ -278,6 +278,17 @@ export default function YoutubeDownloader({ activeAccount, onPlayTrack }) {
                 )}
 
                 <a
+                  href={`https://cobalt.tools/?u=${encodeURIComponent(currentTrack.url)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-gray-200 font-serif-title font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Direct cloud converter fallback for Vercel deployment"
+                >
+                  <i className="fa-solid fa-cloud-arrow-down text-emerald-400"></i>
+                  <span>Cloud MP3</span>
+                </a>
+
+                <a
                   href={currentTrack.url}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -340,6 +351,16 @@ export default function YoutubeDownloader({ activeAccount, onPlayTrack }) {
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 shrink-0">
+                  {onPlayTrack && (
+                    <button
+                      type="button"
+                      onClick={() => onPlayTrack(track)}
+                      className="w-8 h-8 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 flex items-center justify-center text-xs transition-all cursor-pointer"
+                      title="Play track"
+                    >
+                      <i className="fa-solid fa-play ml-0.5"></i>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleDownload(track)}

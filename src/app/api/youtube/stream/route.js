@@ -12,7 +12,11 @@ export async function GET(request) {
 
   try {
     const ytdl = new Ytdl();
-    const info = await ytdl.getInfo(url);
+    const infoPromise = ytdl.getInfo(url);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Stream info timeout")), 6000)
+    );
+    const info = await Promise.race([infoPromise, timeoutPromise]);
     const audioFormats =
       info.formats?.filter((f) => f.hasAudio && !f.hasVideo) || [];
 
@@ -36,7 +40,7 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    console.error("Audio stream route error:", error);
-    return new Response(`Streaming error: ${error.message}`, { status: 500 });
+    console.warn("Audio stream route error/timeout:", error.message);
+    return new Response(`Streaming unavailable for this track: ${error.message}`, { status: 503 });
   }
 }

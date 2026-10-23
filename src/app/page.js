@@ -59,12 +59,16 @@ export default function Home() {
   const handleUnlock = () => {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("lonthaUnlocked", "true");
+      window.dispatchEvent(new CustomEvent("startPartyAudio"));
     }
     setIsUnlocked(true);
   };
 
   const unlockIOSAudioContext = () => {
     try {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("startPartyAudio"));
+      }
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
         const ctx = new AudioCtx();

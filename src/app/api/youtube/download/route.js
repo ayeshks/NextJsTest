@@ -12,11 +12,16 @@ export async function GET(request) {
 
   try {
     const ytdl = new Ytdl();
-    const stream = await ytdl.download(url, {
+    const downloadPromise = ytdl.download(url, {
       filter: { hasAudio: true, hasVideo: false },
       quality: "highestaudio",
     });
 
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Download stream timeout")), 6500)
+    );
+
+    const stream = await Promise.race([downloadPromise, timeoutPromise]);
     const webStream = Readable.toWeb(stream);
 
     const safeTitle = encodeURIComponent(
@@ -31,9 +36,10 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    console.error("YouTube download streaming error:", error);
-    return new Response(`Failed to download audio: ${error.message}`, {
-      status: 500,
-    });
+    console.warn("YouTube download error/timeout, redirecting to cloud converter:", error.message);
+    return Response.redirect(
+      `https://cobalt.tools/?u=${encodeURIComponent(url)}`,
+      307
+    );
   }
 }

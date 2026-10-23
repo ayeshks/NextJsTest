@@ -20,7 +20,17 @@ function openDB() {
   });
 }
 
-export default function HeaderNav({ externalTrack }) {
+function extractYoutubeId(urlOrId) {
+  if (!urlOrId || typeof urlOrId !== "string") return null;
+  const trimmed = urlOrId.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
+  const match = trimmed.match(
+    /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i
+  );
+  return match ? match[1] : null;
+}
+
+export default function HeaderNav({ externalTrack, audioContextUnlocked }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [trackName, setTrackName] = useState("No Song Loaded");
   const [currentTime, setCurrentTime] = useState(0);
@@ -29,44 +39,230 @@ export default function HeaderNav({ externalTrack }) {
   const [isMuted, setIsMuted] = useState(false);
   const [lastVolume, setLastVolume] = useState(0.8);
   const [hasAudio, setHasAudio] = useState(false);
+  const [activeEngine, setActiveEngine] = useState("youtube"); // "youtube" | "html5"
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
 
   const audioRef = useRef(null);
+  const ytPlayerRef = useRef(null);
+  const ytReadyRef = useRef(false);
+  const progressTimerRef = useRef(null);
+  const currentVideoIdRef = useRef(null);
 
+  // Load YouTube IFrame API script
+  const ensureYTAPI = useCallback(() => {
+    return new Promise((resolve) => {
+      if (typeof window === "undefined") {
+        resolve(false);
+        return;
+      }
+      if (window.YT && window.YT.Player) {
+        resolve(true);
+        return;
+      }
+
+      const prevReady = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        if (prevReady) prevReady();
+        resolve(true);
+      };
+
+      if (!document.getElementById("yt-iframe-api-script")) {
+        const tag = document.createElement("script");
+        tag.id = "yt-iframe-api-script";
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(tag);
+      }
+    });
+  }, []);
+
+  // Initialize YouTube Player
+  const initYTPlayer = useCallback((videoId, autoStart = false) => {
+    if (typeof window === "undefined") return;
+
+    ensureYTAPI().then((ready) => {
+      if (!ready || !window.YT) return;
+
+      const container = document.getElementById("yt-audio-player-host");
+      if (!container) return;
+
+      if (ytPlayerRef.current && ytReadyRef.current) {
+        try {
+          currentVideoIdRef.current = videoId;
+          if (autoStart) {
+            ytPlayerRef.current.loadVideoById(videoId);
+            ytPlayerRef.current.playVideo();
+          } else {
+            ytPlayerRef.current.cueVideoById(videoId);
+          }
+        } catch (e) {
+          console.warn("YT cue/load error:", e);
+        }
+        return;
+      }
+
+      try {
+        currentVideoIdRef.current = videoId;
+        ytPlayerRef.current = new window.YT.Player("yt-audio-player-host", {
+          height: "1",
+          width: "1",
+          videoId,
+          playerVars: {
+            autoplay: autoStart ? 1 : 0,
+            controls: 0,
+            playsinline: 1,
+            disablekb: 1,
+            fs: 0,
+            rel: 0,
+          },
+          events: {
+            onReady: (event) => {
+              ytReadyRef.current = true;
+              event.target.setVolume(volume * 100);
+              if (autoStart) {
+                try {
+                  event.target.playVideo();
+                } catch (err) {
+                  console.warn("YT playVideo error:", err);
+                }
+              }
+            },
+            onStateChange: (event) => {
+              // 1: PLAYING, 2: PAUSED, 0: ENDED, 3: BUFFERING
+              if (event.data === 1) {
+                setIsPlaying(true);
+                setAutoplayBlocked(false);
+              } else if (event.data === 2) {
+                setIsPlaying(false);
+              } else if (event.data === 0) {
+                setIsPlaying(false);
+                setCurrentTime(0);
+              }
+            },
+            onError: (err) => {
+              console.warn("YT player error:", err);
+            },
+          },
+        });
+      } catch (err) {
+        console.warn("Failed to create YT Player:", err);
+      }
+    });
+  }, [ensureYTAPI, volume]);
+
+  // Interval for time tracking when YouTube engine is playing
   useEffect(() => {
-    if (externalTrack && externalTrack.url && audioRef.current) {
+    if (activeEngine === "youtube" && isPlaying) {
+      progressTimerRef.current = setInterval(() => {
+        if (ytPlayerRef.current && ytReadyRef.current) {
+          try {
+            const cur = ytPlayerRef.current.getCurrentTime() || 0;
+            const dur = ytPlayerRef.current.getDuration() || 0;
+            setCurrentTime(cur);
+            if (dur > 0) setDuration(dur);
+          } catch {
+            // Ignore cross-frame polling hiccup
+          }
+        }
+      }, 300);
+    } else {
+      if (progressTimerRef.current) {
+        clearInterval(progressTimerRef.current);
+      }
+    }
+
+    return () => {
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    };
+  }, [activeEngine, isPlaying]);
+
+  // React to externalTrack change
+  useEffect(() => {
+    if (!externalTrack) return;
+
+    const ytId =
+      externalTrack.videoId ||
+      extractYoutubeId(externalTrack.url);
+
+    if (ytId) {
+      setActiveEngine("youtube");
+      setTrackName(externalTrack.title || "Party YouTube Track");
+      setHasAudio(true);
+
+      // Pause HTML5 audio if it was running
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+
+      // Initialize or load into YouTube player
+      initYTPlayer(ytId, true);
+    } else if (externalTrack.url && audioRef.current) {
+      // Fallback to HTML5 audio stream for non-YouTube sources
+      setActiveEngine("html5");
       const audio = audioRef.current;
       audio.src = `/api/youtube/stream?url=${encodeURIComponent(
         externalTrack.url
       )}`;
-      setTrackName(externalTrack.title || "Party YouTube Track");
+      setTrackName(externalTrack.title || "Party Track");
       setHasAudio(true);
 
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => setIsPlaying(true))
-          .catch((err) => {
-            console.warn(
-              "Browser blocked zero-click autoplay, awaiting first user interaction:",
-              err
-            );
-            const startOnInteraction = () => {
-              audio
-                .play()
-                .then(() => setIsPlaying(true))
-                .catch(console.warn);
-              window.removeEventListener("click", startOnInteraction);
-              window.removeEventListener("touchstart", startOnInteraction);
-            };
-            window.addEventListener("click", startOnInteraction, { once: true });
-            window.addEventListener("touchstart", startOnInteraction, {
-              once: true,
-            });
-          });
-      }
+      audio
+        .play()
+        .then(() => {
+          setIsPlaying(true);
+          setAutoplayBlocked(false);
+        })
+        .catch(() => {
+          setAutoplayBlocked(true);
+        });
     }
-  }, [externalTrack]);
+  }, [externalTrack, initYTPlayer]);
 
+  // Handle Autoplay Unlock & Event triggers
+  useEffect(() => {
+    const triggerStart = () => {
+      if (activeEngine === "youtube" && ytPlayerRef.current && ytReadyRef.current) {
+        try {
+          ytPlayerRef.current.playVideo();
+          setIsPlaying(true);
+          setAutoplayBlocked(false);
+        } catch (e) {
+          console.warn("Autoplay start failed:", e);
+        }
+      } else if (activeEngine === "html5" && audioRef.current && hasAudio) {
+        audioRef.current
+          .play()
+          .then(() => {
+            setIsPlaying(true);
+            setAutoplayBlocked(false);
+          })
+          .catch(console.warn);
+      }
+    };
+
+    if (audioContextUnlocked) {
+      triggerStart();
+    }
+
+    window.addEventListener("startPartyAudio", triggerStart);
+
+    // Global first-touch listener if browser blocked autoplay
+    const onUserInteraction = () => {
+      triggerStart();
+      window.removeEventListener("click", onUserInteraction);
+      window.removeEventListener("touchstart", onUserInteraction);
+    };
+
+    window.addEventListener("click", onUserInteraction, { once: true });
+    window.addEventListener("touchstart", onUserInteraction, { once: true });
+
+    return () => {
+      window.removeEventListener("startPartyAudio", triggerStart);
+      window.removeEventListener("click", onUserInteraction);
+      window.removeEventListener("touchstart", onUserInteraction);
+    };
+  }, [audioContextUnlocked, activeEngine, hasAudio]);
+
+  // Load cached track from IndexedDB if no externalTrack
   const loadTrackFromIndexedDB = useCallback(async (audio) => {
     const db = await openDB();
     if (!db) return;
@@ -76,43 +272,49 @@ export default function HeaderNav({ externalTrack }) {
       const req = store.get("lastUploadedTrack");
       req.onsuccess = () => {
         const result = req.result;
-        if (result && result.data) {
+        if (result && result.data && !externalTrack) {
           const url = URL.createObjectURL(result.data);
           audio.src = url;
           setTrackName(result.name);
           setHasAudio(true);
+          setActiveEngine("html5");
         }
       };
     } catch (err) {
       console.warn("IndexedDB load failed:", err);
     }
-  }, []);
+  }, [externalTrack]);
 
-  // Initialize Audio & IndexedDB
+  // Initialize HTML5 Audio listener
   useEffect(() => {
     const audio = new Audio();
     audioRef.current = audio;
-    audio.volume = 0.8;
+    audio.volume = volume;
 
     const onTimeUpdate = () => {
-      setCurrentTime(audio.currentTime || 0);
+      if (activeEngine === "html5") {
+        setCurrentTime(audio.currentTime || 0);
+      }
     };
 
     const onLoadedMetadata = () => {
-      setDuration(audio.duration || 0);
-      setHasAudio(true);
+      if (activeEngine === "html5") {
+        setDuration(audio.duration || 0);
+        setHasAudio(true);
+      }
     };
 
     const onEnded = () => {
-      setIsPlaying(false);
-      setCurrentTime(0);
+      if (activeEngine === "html5") {
+        setIsPlaying(false);
+        setCurrentTime(0);
+      }
     };
 
     audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("loadedmetadata", onLoadedMetadata);
     audio.addEventListener("ended", onEnded);
 
-    // Attempt to load track from IndexedDB
     loadTrackFromIndexedDB(audio);
 
     return () => {
@@ -121,7 +323,7 @@ export default function HeaderNav({ externalTrack }) {
       audio.removeEventListener("ended", onEnded);
       audio.pause();
     };
-  }, [loadTrackFromIndexedDB]);
+  }, [activeEngine, loadTrackFromIndexedDB, volume]);
 
   const saveTrackToIndexedDB = async (file) => {
     const db = await openDB();
@@ -147,6 +349,14 @@ export default function HeaderNav({ externalTrack }) {
     const file = e.target.files?.[0];
     if (!file || !audioRef.current) return;
 
+    // Pause YouTube player if running
+    if (ytPlayerRef.current && ytReadyRef.current) {
+      try {
+        ytPlayerRef.current.pauseVideo();
+      } catch {}
+    }
+
+    setActiveEngine("html5");
     saveTrackToIndexedDB(file);
     const url = URL.createObjectURL(file);
     const audio = audioRef.current;
@@ -157,7 +367,10 @@ export default function HeaderNav({ externalTrack }) {
 
     audio
       .play()
-      .then(() => setIsPlaying(true))
+      .then(() => {
+        setIsPlaying(true);
+        setAutoplayBlocked(false);
+      })
       .catch((err) => {
         console.warn("Autoplay blocked:", err);
         setIsPlaying(false);
@@ -165,47 +378,88 @@ export default function HeaderNav({ externalTrack }) {
   };
 
   const togglePlay = () => {
-    if (!audioRef.current || !hasAudio) return;
-    const audio = audioRef.current;
-    if (audio.paused) {
-      audio
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch((err) => console.warn("Audio play error:", err));
-    } else {
-      audio.pause();
-      setIsPlaying(false);
+    if (!hasAudio) return;
+
+    if (activeEngine === "youtube" && ytPlayerRef.current && ytReadyRef.current) {
+      try {
+        if (isPlaying) {
+          ytPlayerRef.current.pauseVideo();
+          setIsPlaying(false);
+        } else {
+          ytPlayerRef.current.playVideo();
+          setIsPlaying(true);
+          setAutoplayBlocked(false);
+        }
+      } catch (err) {
+        console.warn("YT togglePlay error:", err);
+      }
+    } else if (activeEngine === "html5" && audioRef.current) {
+      const audio = audioRef.current;
+      if (audio.paused) {
+        audio
+          .play()
+          .then(() => {
+            setIsPlaying(true);
+            setAutoplayBlocked(false);
+          })
+          .catch((err) => console.warn("Audio play error:", err));
+      } else {
+        audio.pause();
+        setIsPlaying(false);
+      }
     }
   };
 
   const handleSeek = (val) => {
-    if (!audioRef.current || !hasAudio) return;
     const time = parseFloat(val);
-    audioRef.current.currentTime = time;
     setCurrentTime(time);
+
+    if (activeEngine === "youtube" && ytPlayerRef.current && ytReadyRef.current) {
+      try {
+        ytPlayerRef.current.seekTo(time, true);
+      } catch {}
+    } else if (activeEngine === "html5" && audioRef.current) {
+      audioRef.current.currentTime = time;
+    }
   };
 
   const handleVolume = (val) => {
     const vol = parseFloat(val);
     setVolume(vol);
+    setIsMuted(vol === 0);
+
+    if (activeEngine === "youtube" && ytPlayerRef.current && ytReadyRef.current) {
+      try {
+        ytPlayerRef.current.setVolume(vol * 100);
+      } catch {}
+    }
     if (audioRef.current) {
       audioRef.current.volume = vol;
     }
-    setIsMuted(vol === 0);
   };
 
   const toggleMute = () => {
-    if (!audioRef.current) return;
     if (volume > 0) {
       setLastVolume(volume);
       setVolume(0);
-      audioRef.current.volume = 0;
       setIsMuted(true);
+      if (activeEngine === "youtube" && ytPlayerRef.current && ytReadyRef.current) {
+        try {
+          ytPlayerRef.current.mute();
+        } catch {}
+      }
+      if (audioRef.current) audioRef.current.volume = 0;
     } else {
       const restored = lastVolume || 0.8;
       setVolume(restored);
-      audioRef.current.volume = restored;
       setIsMuted(false);
+      if (activeEngine === "youtube" && ytPlayerRef.current && ytReadyRef.current) {
+        try {
+          ytPlayerRef.current.unMute();
+          ytPlayerRef.current.setVolume(restored * 100);
+        } catch {}
+      }
+      if (audioRef.current) audioRef.current.volume = restored;
     }
   };
 
@@ -218,6 +472,20 @@ export default function HeaderNav({ externalTrack }) {
 
   return (
     <header className="sticky top-0 z-40 glass-panel-crimson border-b border-[#DC2626]/30 px-4 lg:px-8 py-3.5">
+      {/* Hidden YouTube Audio Host Container */}
+      <div
+        id="yt-audio-player-host"
+        style={{
+          position: "absolute",
+          top: "-9999px",
+          left: "-9999px",
+          width: "1px",
+          height: "1px",
+          opacity: 0,
+          pointerEvents: "none",
+        }}
+      ></div>
+
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
         {/* Logo Branding */}
         <div className="flex items-center gap-3">
@@ -270,7 +538,7 @@ export default function HeaderNav({ externalTrack }) {
             href="#vip-ticket"
             className="hover:text-amber-300 transition-colors flex items-center gap-1.5"
           >
-            <i className="fa-solid fa-crown text-amber-400"></i> VIP Pass
+            <i className="fa-solid fa-crown text-amber-400"></i> Wonka Pass
           </a>
           <a
             href="#location"
@@ -282,6 +550,16 @@ export default function HeaderNav({ externalTrack }) {
 
         {/* Custom Audio Player Widget */}
         <div className="flex items-center gap-3 bg-black/90 border border-[#DC2626]/40 rounded-2xl px-4 py-2 shadow-neon-crimson">
+          {autoplayBlocked && !isPlaying && (
+            <button
+              onClick={togglePlay}
+              className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-400/50 text-[10px] font-bold animate-pulse flex items-center gap-1 cursor-pointer"
+            >
+              <i className="fa-solid fa-play text-xs"></i>
+              <span>Tap to Play Sound</span>
+            </button>
+          )}
+
           <label className="cursor-pointer bg-[#DC2626]/20 hover:bg-[#DC2626]/40 border border-[#EF4444]/50 text-rose-200 text-xs px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-2 shrink-0">
             <i className="fa-solid fa-file-audio text-[#EF4444]"></i>
             <span>{hasAudio ? "Change Song" : "Upload Song"}</span>
@@ -301,6 +579,7 @@ export default function HeaderNav({ externalTrack }) {
                 ? "bg-gradient-to-r from-[#DC2626] to-red-500 text-white shadow-neon-crimson hover:scale-105 active:scale-95 cursor-pointer"
                 : "bg-gray-800 text-gray-500 cursor-not-allowed"
             }`}
+            title={isPlaying ? "Pause Music" : "Play Music"}
           >
             <i
               className={`fa-solid ${
@@ -311,7 +590,7 @@ export default function HeaderNav({ externalTrack }) {
 
           <div className="hidden sm:flex flex-col min-w-[120px] max-w-[180px] text-left gap-1">
             <div className="flex justify-between items-center text-[10px]">
-              <span className="font-medium text-white truncate max-w-[90px]">
+              <span className="font-medium text-white truncate max-w-[90px]" title={trackName}>
                 {trackName}
               </span>
               <span className="text-gray-400 font-mono text-[9px]">

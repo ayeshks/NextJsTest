@@ -11,9 +11,9 @@
     "id": "2",
     "name": "Party Essential Item 1 (Mixers & Ice)",
     "category": "Drinks",
-    "claimedBy": "Ayesh",
+    "claimedBy": "",
     "claimedAccountId": null,
-    "status": true
+    "status": false
   },
   {
     "id": "3",
@@ -59,9 +59,9 @@
     "id": "8",
     "name": "Projector & Screen",
     "category": "Visuals",
-    "claimedBy": "Kavindu",
+    "claimedBy": "",
     "claimedAccountId": null,
-    "status": true
+    "status": false
   },
   {
     "id": "9",
@@ -75,8 +75,8 @@
     "id": "10",
     "name": "Lasers & Smoke Machine",
     "category": "Visuals",
-    "claimedBy": "Kavindu",
+    "claimedBy": "",
     "claimedAccountId": null,
-    "status": true
+    "status": false
   }
 ]
