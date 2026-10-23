@@ -60,8 +60,9 @@ export async function PATCH(request) {
     }
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
+    console.error("Item PATCH error:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to update item" },
+      { success: false, error: error.message || "Failed to update item" },
       { status: 500 }
     );
   }

@@ -28,8 +28,9 @@ export async function POST(request) {
     const newMessage = await addChatMessage({ sender, text, accountId });
     return NextResponse.json({ success: true, data: newMessage });
   } catch (error) {
+    console.error("Chat API error:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to save message" },
+      { success: false, error: error.message || "Failed to save message" },
       { status: 500 }
     );
   }

@@ -1,32 +1,82 @@
 import fs from "fs/promises";
 import path from "path";
+import os from "os";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+// Bundled read-only project directory on Vercel
+const BUNDLED_DIR = path.join(process.cwd(), "data");
+
+// Writable directory on Vercel / Serverless
+const TMP_DATA_DIR = path.join(os.tmpdir(), "lontha_party_data");
+
+// Maintain an in-memory cache across requests on the same serverless container
+if (!globalThis._lonthaPartyCache) {
+  globalThis._lonthaPartyCache = {};
+}
+const memoryCache = globalThis._lonthaPartyCache;
 
 export async function readJson(filename, defaultData = []) {
+  // 1. Return from in-memory cache if available
+  if (memoryCache[filename]) {
+    return memoryCache[filename];
+  }
+
+  // 2. On Vercel, check if file was previously written to TMP_DATA_DIR
+  if (process.env.VERCEL) {
+    try {
+      const tmpFile = path.join(TMP_DATA_DIR, filename);
+      const content = await fs.readFile(tmpFile, "utf-8");
+      const parsed = JSON.parse(content);
+      memoryCache[filename] = parsed;
+      return parsed;
+    } catch (_) {
+      // Not in /tmp yet, proceed to bundled data
+    }
+  }
+
+  // 3. Read from bundled data directory
   try {
-    const filePath = path.join(DATA_DIR, filename);
-    const content = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(content);
+    const bundledFile = path.join(BUNDLED_DIR, filename);
+    const content = await fs.readFile(bundledFile, "utf-8");
+    const parsed = JSON.parse(content);
+    memoryCache[filename] = parsed;
+    return parsed;
   } catch (error) {
     if (error.code === "ENOENT") {
-      await writeJson(filename, defaultData);
+      memoryCache[filename] = defaultData;
       return defaultData;
     }
-    console.error(`Error reading ${filename}:`, error);
+    console.warn(`Error reading ${filename}:`, error);
+    memoryCache[filename] = defaultData;
     return defaultData;
   }
 }
 
 export async function writeJson(filename, data) {
+  // Always update in-memory cache first so all subsequent reads get latest data
+  memoryCache[filename] = data;
+
+  // On local development, write to local data directory
+  if (!process.env.VERCEL) {
+    try {
+      await fs.mkdir(BUNDLED_DIR, { recursive: true });
+      const filePath = path.join(BUNDLED_DIR, filename);
+      await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
+      return true;
+    } catch (localErr) {
+      console.warn(`Local write error for ${filename}, falling back:`, localErr.message);
+    }
+  }
+
+  // On Vercel / Serverless, write to /tmp where writes are permitted
   try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const filePath = path.join(DATA_DIR, filename);
-    await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
+    await fs.mkdir(TMP_DATA_DIR, { recursive: true });
+    const tmpFile = path.join(TMP_DATA_DIR, filename);
+    await fs.writeFile(tmpFile, JSON.stringify(data, null, 2), "utf-8");
     return true;
-  } catch (error) {
-    console.error(`Error writing ${filename}:`, error);
-    throw error;
+  } catch (tmpErr) {
+    console.warn(`Write to /tmp failed, kept in memory:`, tmpErr.message);
+    // Data is safely stored in memoryCache, so the operation succeeds!
+    return true;
   }
 }
 

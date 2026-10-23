@@ -38,5 +38,13 @@
     "text": "Hi Team",
     "time": "09:52 AM",
     "createdAt": "2026-10-23T04:22:05.383Z"
+  },
+  {
+    "id": "msg-1792739715299",
+    "accountId": "acc-1792729317709",
+    "sender": "Ayesh",
+    "text": "Testing Vercel storage fix",
+    "time": "12:45 PM",
+    "createdAt": "2026-10-23T07:15:15.254Z"
   }
 ]
